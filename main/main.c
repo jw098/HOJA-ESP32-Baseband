@@ -821,55 +821,61 @@ void app_main(void)
         }
     }
 
-    // Set up I2C slave device with custom driver
-    mi2c_slave_setup();
+    settings_default();
+    _bluetooth_input_cb = switch_bt_sendinput;
+    ESP_LOGI(TAG, "Switch BT Mode Init...");
 
-    // Main I2C loop
-    for (;;)
-    {   
-        // Unload any and all pending messages
-        ringbuffer_unload_threadsafe();
+    core_bt_switch_start();
 
-        //printf("i2c RX read attempt\n");
-        mi2c_status_t read_status = mi2c_slave_polling_read(_i2c_buffer_in, I2C_RX_BUFFER_SIZE, 8);
+    // // Set up I2C slave device with custom driver
+    // mi2c_slave_setup();
 
-        if (read_status == MI2C_OK)
-        {
-            //printf("I2C RX OK\n");
-            // Check command type
-            switch (_i2c_buffer_in[0])
-            {
-            default:
-                ESP_LOGI(TAG, "Unknown RX");
-                break;
+    // // Main I2C loop
+    // for (;;)
+    // {   
+    //     // Unload any and all pending messages
+    //     ringbuffer_unload_threadsafe();
 
-            case I2C_CMD_STANDARD:
-                //printf("I2C standard OK\n");
-                // Say we're OK to send haptic data
-                haptic_buffer_connected = true;
-                // ESP_LOGI(TAG, "Input RX");
-                bt_device_input(_i2c_buffer_in, false);
-                // Transmit
-                i2c_handle_new_tx();
-                break;
+    //     //printf("i2c RX read attempt\n");
+    //     mi2c_status_t read_status = mi2c_slave_polling_read(_i2c_buffer_in, I2C_RX_BUFFER_SIZE, 8);
 
-            case I2C_CMD_START:
-                ESP_LOGI(TAG, "Start System RX");
-                bt_device_start(_i2c_buffer_in);
-                // We do not transmit anything with this command
-                break;
+    //     if (read_status == MI2C_OK)
+    //     {
+    //         //printf("I2C RX OK\n");
+    //         // Check command type
+    //         switch (_i2c_buffer_in[0])
+    //         {
+    //         default:
+    //             ESP_LOGI(TAG, "Unknown RX");
+    //             break;
 
-            case I2C_CMD_FIRMWARE_VERSION:
-                ESP_LOGI(TAG, "Firmware Version Request RX");
-                bt_device_return_fw_version();
-                break;
-            }   
-        }
-        else
-        {
+    //         case I2C_CMD_STANDARD:
+    //             //printf("I2C standard OK\n");
+    //             // Say we're OK to send haptic data
+    //             haptic_buffer_connected = true;
+    //             // ESP_LOGI(TAG, "Input RX");
+    //             bt_device_input(_i2c_buffer_in, false);
+    //             // Transmit
+    //             i2c_handle_new_tx();
+    //             break;
 
-        }
-        vTaskDelay(1/portTICK_PERIOD_MS);
-        app_process_internal_adc();
-    }
+    //         case I2C_CMD_START:
+    //             ESP_LOGI(TAG, "Start System RX");
+    //             bt_device_start(_i2c_buffer_in);
+    //             // We do not transmit anything with this command
+    //             break;
+
+    //         case I2C_CMD_FIRMWARE_VERSION:
+    //             ESP_LOGI(TAG, "Firmware Version Request RX");
+    //             bt_device_return_fw_version();
+    //             break;
+    //         }   
+    //     }
+    //     else
+    //     {
+
+    //     }
+    //     vTaskDelay(1/portTICK_PERIOD_MS);
+    //     app_process_internal_adc();
+    // }
 }
