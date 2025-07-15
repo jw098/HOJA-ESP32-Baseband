@@ -819,9 +819,13 @@ void app_main(void)
             nvs_close(my_handle);
             ESP_LOGI(TAG, "HOJA config set to default OK.");
         }
+        settings_default();
+        nvs_set_blob(my_handle, "hoja_settings", &global_loaded_settings, sizeof(hoja_settings_s));
+        nvs_commit(my_handle);
+        nvs_close(my_handle);
+        ESP_LOGI(TAG, "HOJA config set to default OK.");
     }
 
-    settings_default();
     _bluetooth_input_cb = switch_bt_sendinput;
     ESP_LOGI(TAG, "Switch BT Mode Init...");
 
