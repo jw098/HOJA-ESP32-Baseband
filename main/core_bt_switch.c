@@ -1,5 +1,6 @@
 #include "core_bt_switch.h"
 #include "esp_log.h"
+#include <stdio.h>
 
 typedef struct
 {
@@ -621,6 +622,170 @@ void core_bt_switch_stop(void)
     util_bluetooth_deinit();
 }
 
+/**
+ * @brief A struct containing unions which are usful
+ * for setting individual button bits, as well as
+ * accessing full report bytes for later sending.
+ */
+typedef struct
+{
+    union
+    {
+        struct
+        {
+            uint8_t b_down      : 1;
+            uint8_t b_right     : 1;
+            uint8_t b_left      : 1;
+            uint8_t b_up        : 1;
+            uint8_t t_sl        : 1;
+            uint8_t t_sr        : 1;
+            uint8_t none        : 2;   
+        };
+        uint8_t buttons_first;
+    };
+    union
+    {
+        struct
+        {
+            uint8_t b_minus     : 1;
+            uint8_t b_plus      : 1;
+            uint8_t sb_left     : 1;
+            uint8_t sb_right    : 1;
+            uint8_t b_home      : 1;
+            uint8_t b_capture   : 1;
+            uint8_t t_lr        : 1;
+            uint8_t t_zlzr      : 1;
+        };
+        uint8_t buttons_second;
+    };
+    uint8_t stick_hat;
+
+    // Stick analog values
+    uint8_t l_stick[4];
+    uint8_t r_stick[4];
+
+} __attribute__ ((packed)) ns_input_short_s;
+
+/** 
+ * @brief This data should always be provided as uint16_t to provide
+ * as much data as possible. This data will likely need to be
+ * scaled down to a different range and we should provide more
+ * data to avoid as much stairstepping in values as possible. ONLY 12 BIT VALS.
+ * 
+ * @param           ls_x  Left Stick X Data
+ * @param           ls_y  Left Stick Y Data
+ * @param           rs_x  Left Stick X Data
+ * @param           rs_y  Left Stick X Data
+ * @param           lt_a  Left trigger Analog Data
+ * @param           rt_a  Right trigger Analog Data
+*/
+typedef struct 
+{
+    uint16_t ls_x;
+    uint16_t ls_y;
+    uint16_t rs_x;
+    uint16_t rs_y;
+    uint16_t lt_a;
+    uint16_t rt_a;
+} __attribute__ ((packed)) hoja_analog_data_s;
+
+/** @brief This is a struct for containing all of the 
+ * button input data as bits. This saves space
+ * and allows for easier handoff to the various
+ * controller cores in the future. 
+**/
+typedef struct 
+{
+    union
+    {
+        struct
+        {
+            // D-Pad
+            uint8_t dpad_up         : 1;
+            uint8_t dpad_down       : 1;
+            uint8_t dpad_left       : 1;
+            uint8_t dpad_right      : 1;
+            // Buttons
+            uint8_t button_up       : 1;
+            uint8_t button_down     : 1;
+            uint8_t button_left     : 1;
+            uint8_t button_right    : 1;
+            // Triggers
+            uint8_t trigger_l       : 1;
+            uint8_t trigger_zl      : 1;
+            uint8_t trigger_r       : 1;
+            uint8_t trigger_zr      : 1;
+
+            // Special Functions
+            uint8_t button_start    : 1;
+            uint8_t button_select   : 1;
+            
+            // Stick clicks
+            uint8_t button_stick_left   : 1;
+            uint8_t button_stick_right  : 1;
+        };
+        uint16_t buttons_all;
+    };
+
+    union
+    {
+        struct
+        {
+            // Menu buttons (Not remappable by API)
+            uint8_t button_capture  : 1;
+            uint8_t button_home     : 1;
+            uint8_t padding         : 6;
+        };
+        uint8_t buttons_system;
+    };
+
+    // Button for sleeping the controller
+    uint8_t button_sleep;
+
+    // Button for pairing the controller
+    uint8_t button_pair;
+
+} __attribute__ ((packed)) hoja_button_data_s;
+
+#define NS_INPUT_REPORT_BUFFERSIZE  60
+#define NS_REPORT_SHORT 0x3F
+#define NS_REPORT_SHORT_LEN 12
+uint8_t ns_input_report[NS_INPUT_REPORT_BUFFERSIZE] = {};
+hoja_analog_data_s hoja_analog_data = {};
+hoja_button_data_s hoja_processed_buttons = {};
+
+void ns_input_translate_short(ns_input_short_s *ns_input_short)
+{
+    // TODO short mode implementation (maybe not needed?)
+    
+
+    // Short mode stick data set
+    ns_input_short->l_stick[0] = hoja_analog_data.ls_x & 0xFF;
+    ns_input_short->l_stick[1] = (hoja_analog_data.ls_x & 0xF00) >> 8;
+    ns_input_short->l_stick[2] = hoja_analog_data.ls_y & 0xFF;
+    ns_input_short->l_stick[3] = (hoja_analog_data.ls_y & 0xF00) >> 8;
+    ns_input_short->b_right     = hoja_processed_buttons.button_right;
+    ns_input_short->b_down      = hoja_processed_buttons.button_down;
+}
+
+// Sets the input report for short mode.
+void ns_report_setinputreport_short(ns_input_short_s *ns_input_short)
+{
+    ns_input_report[0] = ns_input_short->buttons_first;
+    ns_input_report[1] = ns_input_short->buttons_second;
+    ns_input_report[2] = 0x8; //ns_input_short.stick_hat;
+
+    // To-do: Sticks
+    ns_input_report[3] = ns_input_short->l_stick[0];
+    ns_input_report[4] = ns_input_short->l_stick[1];
+    ns_input_report[5] = ns_input_short->l_stick[2];
+    ns_input_report[6] = ns_input_short->l_stick[3];
+    ns_input_report[7] = 0;
+    ns_input_report[8] = 0;
+    ns_input_report[9] = 0;
+    ns_input_report[10] = 0;
+}
+
 void _switch_bt_task_standard(void *parameters)
 {
     ESP_LOGI("_switch_bt_task_standard", "Starting input loop task...");
@@ -630,6 +795,7 @@ void _switch_bt_task_standard(void *parameters)
     //_report_mode = NS_REPORT_MODE_BLANK;
     _hid_connected = false;
     app_set_report_timer(DEFAULT_US_DELAY); 
+    ns_input_short_s ns_input_short = {0};
 
     for (;;)
     {
@@ -642,13 +808,25 @@ void _switch_bt_task_standard(void *parameters)
             {
                 if((_report_mode == NS_REPORT_MODE_FULL))
                 {
-                    ns_report_clear(_full_buffer, 64);
-                    ns_report_setinputreport_full(_full_buffer);
-                    ns_report_settimer(_full_buffer);
-                    ns_report_setbattconn(_full_buffer);
-                    //_full_buffer[12] = 0x70;
-                    if(_hid_connected)
-                        esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30, SWITCH_BT_REPORT_SIZE, _full_buffer);
+                    // ESP_LOGI("_switch_bt_task_standard", "send report...");
+                    memset(ns_input_report, 0, sizeof(ns_input_report));
+
+                    ns_input_translate_short(&ns_input_short);
+                    ns_report_setinputreport_short(&ns_input_short);        
+                    esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, NS_REPORT_SHORT, NS_REPORT_SHORT_LEN, ns_input_report);   
+
+                    // // esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30, SWITCH_BT_REPORT_SIZE, _full_buffer);                                
+                    // // for (int i = 0; i < 64; i++){
+                    // //     printf("%d ", _full_buffer[i]);
+                    // // }                    
+
+                    // ns_report_clear(_full_buffer, 64);
+                    // ns_report_setinputreport_full(_full_buffer);
+                    // ns_report_settimer(_full_buffer);
+                    // ns_report_setbattconn(_full_buffer);
+                    // //_full_buffer[12] = 0x70;
+                    // if(_hid_connected)
+                    //     esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30, SWITCH_BT_REPORT_SIZE, _full_buffer);
                 }
                 else
                 {
