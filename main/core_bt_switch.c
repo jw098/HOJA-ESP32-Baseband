@@ -632,6 +632,38 @@ void core_bt_switch_stop(void)
     util_bluetooth_deinit();
 }
 
+typedef struct{
+    uint8_t button3;
+    uint8_t button4;
+    uint8_t button5;
+    uint8_t left_joystick[3];
+    uint8_t right_joystick[3];
+    uint8_t vibrator;
+} PABB_NintendoSwitch_ButtonState;
+
+typedef struct{
+    int16_t accel_x;
+    int16_t accel_y;
+    int16_t accel_z;
+    int16_t rotation_x;
+    int16_t rotation_y;
+    int16_t rotation_z;
+} PABB_NintendoSwitch_GyroState;
+
+typedef struct{
+    PABB_NintendoSwitch_GyroState time0;
+    PABB_NintendoSwitch_GyroState time1;
+    PABB_NintendoSwitch_GyroState time2;
+} PABB_NintendoSwitch_GyroStateX3;
+
+typedef struct{
+    uint8_t report_id;
+    uint8_t timer;
+    uint8_t byte2;
+    PABB_NintendoSwitch_ButtonState buttons;
+    PABB_NintendoSwitch_GyroStateX3 gyro;
+} __attribute__((packed)) NintendoSwitch_ESP32Report0x30;
+
 void _switch_bt_task_standard(void *parameters)
 {
     ESP_LOGI("_switch_bt_task_standard", "Starting input loop task...");
@@ -653,13 +685,36 @@ void _switch_bt_task_standard(void *parameters)
             {
                 if((_report_mode == NS_REPORT_MODE_FULL))
                 {
-                    ns_report_clear(_full_buffer, 64);
-                    ns_report_setinputreport_full(_full_buffer);
-                    ns_report_settimer(_full_buffer);
-                    ns_report_setbattconn(_full_buffer);
-                    //_full_buffer[12] = 0x70;
-                    if(_hid_connected)
-                        esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30, SWITCH_BT_REPORT_SIZE, _full_buffer);
+
+                    NintendoSwitch_ESP32Report0x30 report;
+                    report.report_id = 0x30;
+                    report.timer = 1; //  This one doesn't seem to matter. You increase it by 1 each time you send something.
+                    PABB_NintendoSwitch_ButtonState buttons = {
+                        .button3 = 0,
+                        .button4 = 0,
+                        .button5 = 0,
+                        .left_joystick = {0x00, 0x08, 0x80},
+                        .right_joystick = {0x00, 0x08, 0x80},
+                        .vibrator = 0x80,
+                    };
+                    report.buttons = buttons;
+                    PABB_NintendoSwitch_GyroStateX3 gyro = {};   //  all zeros. You can memset it to zero.                    
+                    report.gyro = gyro;
+                    esp_bt_hid_device_send_report(
+                            ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30,
+                            sizeof(NintendoSwitch_ESP32Report0x30) - 1, (uint8_t*)&report + 1
+                        );                    
+
+
+                    // ns_report_clear(_full_buffer, 64);
+                    // ns_report_setinputreport_full(_full_buffer);
+                    // ns_report_settimer(_full_buffer);
+                    // ns_report_setbattconn(_full_buffer);
+                    // //_full_buffer[12] = 0x70;
+                    // if(_hid_connected){
+                    //     ESP_LOGI("_switch_bt_task_standard", "send report...");
+                    //     esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30, SWITCH_BT_REPORT_SIZE, _full_buffer);
+                    // }
                 }
                 else
                 {
