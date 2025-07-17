@@ -664,6 +664,8 @@ typedef struct{
     PABB_NintendoSwitch_GyroStateX3 gyro;
 } __attribute__((packed)) NintendoSwitch_ESP32Report0x30;
 
+uint8_t report_timer = 0;
+
 void _switch_bt_task_standard(void *parameters)
 {
     ESP_LOGI("_switch_bt_task_standard", "Starting input loop task...");
@@ -688,7 +690,8 @@ void _switch_bt_task_standard(void *parameters)
 
                     NintendoSwitch_ESP32Report0x30 report;
                     report.report_id = 0x30;
-                    report.timer = 1; //  This one doesn't seem to matter. You increase it by 1 each time you send something.
+                    report.timer = report_timer++; //  You increase it by 1 each time you send something.
+                    report.byte2 = 0x91;  // Perpetual Battery State
                     PABB_NintendoSwitch_ButtonState buttons = {
                         .button3 = 0,
                         .button4 = 0,
@@ -700,6 +703,7 @@ void _switch_bt_task_standard(void *parameters)
                     report.buttons = buttons;
                     PABB_NintendoSwitch_GyroStateX3 gyro = {};   //  all zeros. You can memset it to zero.                    
                     report.gyro = gyro;
+                    // printf("%"PRIu8" \n", report_timer);
                     esp_bt_hid_device_send_report(
                             ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30,
                             sizeof(NintendoSwitch_ESP32Report0x30) - 1, (uint8_t*)&report + 1
