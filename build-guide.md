@@ -1,7 +1,7 @@
 # build guide
 
 ## Setup custom ESP-IDF in Windows
-- We need HOJA's custom ESP-IDF. Clone it from here. We want the `hoja_stable` branch.
+- We need HOJA's custom ESP-IDF. Clone it recursively from the following link. We want the `hoja_stable` branch.
     - git clone --recursive -b hoja_stable https://github.com/HandHeldLegend/esp-idf.git
 - use the Windows installer tool. 
     - see the link on this page: https://docs.espressif.com/projects/esp-idf/en/stable/esp32/get-started/windows-setup.html
